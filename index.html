@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Diff Pro - Pure JS</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --added-bg: #f0fdf4;
+            --removed-bg: #fef2f2;
+            --changed-bg: #fffbeb;
+            --diff-text: #dc2626;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        header {
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .config-panel {
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .config-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        select {
+            padding: 0.4rem;
+            border: 1px solid var(--border);
+            border-radius: 0.4rem;
+            outline: none;
+        }
+
+        .upload-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .upload-card {
+            background: var(--card-bg);
+            border: 2px dashed var(--border);
+            border-radius: 0.75rem;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .upload-card.active {
+            border-color: var(--primary);
+            background-color: #eff6ff;
+        }
+
+        .upload-card input {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .toolbar {
+            background: var(--card-bg);
+            padding: 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .table-container {
+            background: var(--card-bg);
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+            overflow: auto;
+            max-height: 600px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            text-align: left;
+        }
+
+        th {
+            background: #f1f5f9;
+            padding: 0.75rem;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: top;
+        }
+
+        .key-col {
+            background: #f8fafc;
+            font-weight: 700;
+            color: var(--primary);
+            border-right: 2px solid var(--border);
+        }
+
+        .row-added { background-color: var(--added-bg); }
+        .row-removed { background-color: var(--removed-bg); }
+        .row-changed { background-color: var(--changed-bg); }
+
+        .cell-old {
+            display: block;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-decoration: line-through;
+            line-height: 1;
+            margin-bottom: 2px;
+        }
+
+        .cell-new-diff {
+            color: var(--diff-text);
+            font-weight: 500;
+        }
+
+        .legend {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: #eff6ff;
+            border-radius: 0.75rem;
+            border: 1px solid #dbeafe;
+            font-size: 0.875rem;
+        }
+
+        .btn-reset {
+            padding: 0.5rem 1rem;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            cursor: pointer;
+        }
+
+        .hidden { display: none !important; }
+
+        .diff-cell { position: relative; }
+        .diff-cell:hover::after {
+            content: attr(data-old);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            z-index: 20;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h1>📊 CSV Diff Pro</h1>
+            <div style="color: var(--text-muted)">1列目をキーとして差分を比較します</div>
+        </div>
+        <button class="btn-reset" onclick="resetAll()">リセット</button>
+    </header>
+
+    <div class="config-panel">
+        <div class="config-item">
+            <label for="encoding-select">文字コード:</label>
+            <select id="encoding-select">
+                <option value="UTF-8">UTF-8</option>
+                <option value="Shift_JIS">Shift_JIS</option>
+            </select>
+        </div>
+        <div class="config-item" style="color: var(--primary)">
+            <span>※ 1列目を比較キーとして使用します</span>
+        </div>
+    </div>
+
+    <div class="upload-section">
+        <div class="upload-card" id="drop-zone-a">
+            <div id="label-a">
+                <strong>ファイルA (比較元)</strong>
+                <p style="font-size: 0.875rem; color: var(--text-muted)">CSVファイルをドロップまたはクリック</p>
+            </div>
+            <input type="file" id="file-a" accept=".csv">
+        </div>
+        <div class="upload-card" id="drop-zone-b">
+            <div id="label-b">
+                <strong>ファイルB (比較先)</strong>
+                <p style="font-size: 0.875rem; color: var(--text-muted)">CSVファイルをドロップまたはクリック</p>
+            </div>
+            <input type="file" id="file-b" accept=".csv">
+        </div>
+    </div>
+
+    <div id="results-area" class="hidden">
+        <div class="stats-grid">
+            <div class="stat-card" style="border-left: 4px solid #2563eb">
+                <div class="stat-label">ユニークキー合計</div>
+                <div class="stat-value" id="stat-total">0</div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #f59e0b">
+                <div class="stat-label">内容変更</div>
+                <div class="stat-value" id="stat-changed">0</div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #10b981">
+                <div class="stat-label">追加 (Bにのみ存在)</div>
+                <div class="stat-value" id="stat-added">0</div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #ef4444">
+                <div class="stat-label">削除 (Aにのみ存在)</div>
+                <div class="stat-value" id="stat-removed">0</div>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="キーまたは値を検索...">
+            </div>
+            <div style="display: flex; gap: 1rem;">
+                <label style="cursor: pointer; font-size: 0.875rem;">
+                    <input type="checkbox" id="diff-only-toggle"> 差分のみ表示
+                </label>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table id="result-table">
+                <thead>
+                    <tr id="table-head"></tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+
+        <div class="legend">
+            <strong>凡例:</strong>
+            <span style="margin-left: 10px"><span style="color: var(--diff-text)">赤字</span>: 内容の不一致</span>
+            <span style="margin-left: 10px; background: var(--added-bg); padding: 0 4px">緑背景</span>: ファイルBにのみ存在するキー（追加）
+            <span style="margin-left: 10px; background: var(--removed-bg); padding: 0 4px">赤背景</span>: ファイルAにのみ存在するキー（削除）
+        </div>
+    </div>
+</div>
+
+<script>
+    let dataA = [];
+    let dataB = [];
+    let fileObjA = null;
+    let fileObjB = null;
+    let diffResult = null;
+
+    // CSV Parser
+    function parseCSV(text) {
+        const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
+        return lines.map(line => {
+            const result = [];
+            let current = "";
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"' && line[i + 1] === '"') {
+                    current += '"'; i++;
+                } else if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = "";
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim());
+            return result;
+        });
+    }
+
+    async function readFile(file, encoding) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(parseCSV(e.target.result));
+            reader.readAsText(file, encoding);
+        });
+    }
+
+    async function processFiles() {
+        const encoding = document.getElementById('encoding-select').value;
+        if (fileObjA) dataA = await readFile(fileObjA, encoding);
+        if (fileObjB) dataB = await readFile(fileObjB, encoding);
+
+        if (dataA.length > 0 && dataB.length > 0) {
+            compareData();
+        }
+    }
+
+    function compareData() {
+        const headersA = dataA[0] || [];
+        const headersB = dataB[0] || [];
+        // ヘッダーはBを優先、不足分をAで補う
+        const headers = headersB.length >= headersA.length ? headersB : headersA;
+
+        // 1列目をキーとしてMapを作成 (ヘッダー除く)
+        const mapA = new Map();
+        dataA.slice(1).forEach(row => { if(row[0]) mapA.set(row[0], row); });
+
+        const mapB = new Map();
+        dataB.slice(1).forEach(row => { if(row[0]) mapB.set(row[0], row); });
+
+        // 全てのユニークキーを抽出
+        const allKeys = Array.from(new Set([...mapA.keys(), ...mapB.keys()]));
+        
+        let stats = { added: 0, removed: 0, changed: 0, total: allKeys.length };
+        const rows = [];
+
+        allKeys.forEach(key => {
+            const rowA = mapA.get(key);
+            const rowB = mapB.get(key);
+            let type = 'equal';
+            let cells = [];
+
+            if (rowA && !rowB) {
+                type = 'removed';
+                stats.removed++;
+                // Aのデータを入れる
+                const maxLen = Math.max(rowA.length, headers.length);
+                for(let i=0; i<maxLen; i++) cells.push({ vA: rowA[i] || "", vB: "", isDiff: true });
+            } 
+            else if (!rowA && rowB) {
+                type = 'added';
+                stats.added++;
+                // Bのデータを入れる
+                const maxLen = Math.max(rowB.length, headers.length);
+                for(let i=0; i<maxLen; i++) cells.push({ vA: "", vB: rowB[i] || "", isDiff: true });
+            } 
+            else {
+                // 両方存在する場合の比較
+                let hasDiff = false;
+                const maxLen = Math.max(rowA.length, rowB.length, headers.length);
+                for(let i=0; i<maxLen; i++) {
+                    const vA = rowA[i] || "";
+                    const vB = rowB[i] || "";
+                    const isDiff = vA !== vB;
+                    if (isDiff) hasDiff = true;
+                    cells.push({ vA, vB, isDiff });
+                }
+                if (hasDiff) {
+                    type = 'changed';
+                    stats.changed++;
+                }
+            }
+
+            rows.push({ key, type, cells });
+        });
+
+        diffResult = { headers, rows, stats };
+        
+        document.getElementById('stat-total').innerText = stats.total;
+        document.getElementById('stat-changed').innerText = stats.changed;
+        document.getElementById('stat-added').innerText = stats.added;
+        document.getElementById('stat-removed').innerText = stats.removed;
+        document.getElementById('results-area').classList.remove('hidden');
+        renderTable();
+    }
+
+    function renderTable() {
+        if (!diffResult) return;
+
+        const searchTerm = document.getElementById('search-input').value.toLowerCase();
+        const diffOnly = document.getElementById('diff-only-toggle').checked;
+        const headRow = document.getElementById('table-head');
+        const tbody = document.getElementById('table-body');
+
+        // Header
+        headRow.innerHTML = "";
+        diffResult.headers.forEach((h, i) => {
+            const th = document.createElement('th');
+            if (i === 0) th.className = 'key-col';
+            th.innerText = h || `列${i+1}`;
+            headRow.appendChild(th);
+        });
+
+        // Body
+        tbody.innerHTML = "";
+        diffResult.rows.forEach(row => {
+            const matchesSearch = row.key.toLowerCase().includes(searchTerm) || row.cells.some(c => c.vB.toLowerCase().includes(searchTerm));
+            const matchesDiff = !diffOnly || row.type !== 'equal';
+
+            if (!matchesSearch || !matchesDiff) return;
+
+            const tr = document.createElement('tr');
+            if (row.type === 'added') tr.className = 'row-added';
+            if (row.type === 'removed') tr.className = 'row-removed';
+            if (row.type === 'changed') tr.className = 'row-changed';
+
+            row.cells.forEach((cell, i) => {
+                const td = document.createElement('td');
+                if (i === 0) td.className = 'key-col';
+
+                if (cell.isDiff && row.type === 'changed') {
+                    td.className += ' diff-cell';
+                    td.setAttribute('data-old', `元: ${cell.vA || '(空)'}`);
+                    td.innerHTML = `<span class="cell-old">${cell.vA}</span><span class="cell-new-diff">${cell.vB}</span>`;
+                } else if (row.type === 'removed') {
+                    td.innerHTML = `<span class="cell-old">${cell.vA}</span>`;
+                } else {
+                    td.innerText = cell.vB || cell.vA || "";
+                }
+                tr.appendChild(td);
+            });
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    function resetAll() {
+        dataA = []; dataB = []; fileObjA = null; fileObjB = null; diffResult = null;
+        document.querySelectorAll('input[type="file"]').forEach(i => i.value = "");
+        document.getElementById('label-a').innerHTML = '<strong>ファイルA (比較元)</strong><p style="font-size: 0.875rem; color: var(--text-muted)">CSVファイルをドロップまたはクリック</p>';
+        document.getElementById('label-b').innerHTML = '<strong>ファイルB (比較先)</strong><p style="font-size: 0.875rem; color: var(--text-muted)">CSVファイルをドロップまたはクリック</p>';
+        document.getElementById('drop-zone-a').classList.remove('active');
+        document.getElementById('drop-zone-b').classList.remove('active');
+        document.getElementById('results-area').classList.add('hidden');
+    }
+
+    // Listeners
+    document.getElementById('file-a').addEventListener('change', (e) => {
+        fileObjA = e.target.files[0];
+        if(fileObjA) {
+            document.getElementById('label-a').innerHTML = `<strong>${fileObjA.name}</strong><br>選択済み`;
+            document.getElementById('drop-zone-a').classList.add('active');
+            processFiles();
+        }
+    });
+
+    document.getElementById('file-b').addEventListener('change', (e) => {
+        fileObjB = e.target.files[0];
+        if(fileObjB) {
+            document.getElementById('label-b').innerHTML = `<strong>${fileObjB.name}</strong><br>選択済み`;
+            document.getElementById('drop-zone-b').classList.add('active');
+            processFiles();
+        }
+    });
+
+    document.getElementById('encoding-select').addEventListener('change', processFiles);
+    document.getElementById('search-input').addEventListener('input', renderTable);
+    document.getElementById('diff-only-toggle').addEventListener('change', renderTable);
+
+</script>
+
+</body>
+</html>
